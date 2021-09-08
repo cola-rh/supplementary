@@ -1,0 +1,92 @@
+---
+title: "Apply hierarchical consensus partitioning on the example dataset in Figure 1"
+author: "Zuguang Gu (z.gu@dkfz.de)"
+date: '`r Sys.Date()`'
+output:
+  html_document:
+    fig_caption: true
+---
+
+```{r, echo = FALSE}
+library(knitr)
+knitr::opts_chunk$set(
+    warning = FALSE,
+    results = FALSE,
+    fig.align = "center")
+```
+
+In Figure 1 of the manuscript, we constructed a random matrix that contained groups with large difference
+as well as groups with small difference and we demonstrated that standard consensus partitioning procedures
+cannot separate all the four groups simultaneously. In this supplementary, we demonstrate that hierarchical consensus
+partitioning is able to identify all groups.
+
+
+First we generate the random matrix the same as in Figure 1.
+
+```{r, fig.cap = "Figure S1.1. Heatmap of the random matrix used in Figure 1 in the manuscript."}
+library(ComplexHeatmap)
+
+set.seed(54)
+mean_diff1 = rnorm(100)
+
+m1 = do.call(rbind, lapply(1:100, function(i) {
+	c(rnorm(50, mean = mean_diff1[i]), rnorm(50, mean = -mean_diff1[i]))
+}))
+
+mean_diff2 = rnorm(100)/2
+mean_diff2[order(abs(mean_diff1))] = mean_diff2[order(abs(mean_diff2), decreasing = TRUE)]
+
+m2 = do.call(rbind, lapply(1:100, function(i) {
+	c(rnorm(10, mean = mean_diff2[i]), rnorm(10, mean = -mean_diff2[i]))
+}))
+
+m = cbind(m1, m2)
+
+group = rep(c("A1", "A2", "B1", "B2"), times = c(50, 50, 10, 10))
+group_col = structure(c("#E41A1C", "#377EB8", "#4DAF4A", "#984EA3"), names = c("A1", "A2", "B1", "B2"))
+
+Heatmap(m, name = "mat", 
+	top_annotation = HeatmapAnnotation(Group = group, col = list(Group = group_col)),
+	show_row_dend = FALSE, column_title = "Heatmap of the random dataset",
+	row_dend_reorder = mean_diff1, column_dend_reorder = as.numeric(factor(group))
+)
+```
+
+The standard consensus partition procedures cannot identify all four groups. It can only identify
+three groups as the best results:
+
+```{r, fig.width = 10, fig.height = 10, fig.cap = "Figure S1.2. Various plots for interpreting consensus partitioning results."}
+res = consensus_partition(m, top_value_method = "SD", partition_method = "kmeans",
+	top_n = 50, anno = group, anno_col = group_col, scale_rows = FALSE)
+collect_plots(res)
+```
+
+Then we apply hierarchical consensus partitioning with the function `hierarchical_partition()` on the matrix:
+
+```{r}
+library(cola)
+rh = hierarchical_partition(m, 
+	top_value_method = "SD", partition_method = "kmeans", 
+	anno = group, anno_col = group_col,
+	top_n = 50, scale_rows = FALSE)
+```
+
+We can print the `rh` object:
+
+```{r, results = TRUE}
+rh
+```
+
+The function `collect_classes()` draws the subgroup hierarchy:
+
+```{r, fig.cap = "Figure S1.3. Hierarchiy of cola HCP."}
+collect_classes(rh)
+```
+
+As we can see, all the four groups are separated.
+
+## Session info
+
+```{r, results = TRUE}
+sessionInfo()
+```

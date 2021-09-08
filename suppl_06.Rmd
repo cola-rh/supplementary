@@ -1,0 +1,119 @@
+---
+title: "Analysis of the TCGA GBM microarray dataset"
+author: "Zuguang Gu (z.gu@dkfz.de)"
+date: '`r Sys.Date()`'
+output:
+  html_document:
+    fig_caption: true
+---
+
+```{r, echo = FALSE}
+library(knitr)
+knitr::opts_chunk$set(
+    warning = FALSE,
+    message = FALSE,
+    results = "hide",
+    fig.align = "center")
+```
+
+```{r, echo = FALSE}
+library(cola)
+```
+
+We read the matrix and perform normalization.
+
+
+```{r, eval = FALSE}
+library(cola)
+
+m = read.table("https://jokergoo.github.io/cola_examples/TCGA_GBM/unifiedScaled.txt", 
+    header = TRUE, row.names = 1, check.names = FALSE)
+m = as.matrix(m)
+
+subtype = read.table("https://jokergoo.github.io/cola_examples/TCGA_GBM/TCGA_unified_CORE_ClaNC840.txt", 
+    sep = "\t", header = TRUE, check.names = FALSE, stringsAsFactors = FALSE)
+subtype = structure(unlist(subtype[1, -(1:2)]), names = colnames(subtype)[-(1:2)])
+subtype_col = structure(seq_len(4), names = unique(subtype))
+
+m = m[, names(subtype)]
+m = adjust_matrix(m)
+
+library(preprocessCore)
+cn = colnames(m)
+rn = rownames(m)
+m = normalize.quantiles(m)
+colnames(m) = cn
+rownames(m) = rn
+```
+
+First we apply standard consensus partitioning analysis with "ATC" as the top-value method
+and "skmeans" as partitioning method.
+
+```{r, eval = FALSE}
+set.seed(123)
+res = consensus_partition(m, top_value_method = "ATC", partition_method = "skmeans",
+    cores = 4, anno = subtype, anno_col = subtype_col)
+```
+
+```{r, echo = FALSE}
+res = readRDS("TCGA_GBM_microarray_CP.rds")
+```
+
+In the following plot, **cola** suggests 5 as the best number of subgroups, but
+we select 4 as the best k because it gives more stable classification.
+
+```{r, results = "markup", message = TRUE}
+suggest_best_k(res)
+```
+
+```{r, fig.width = 8, fig.height = 8, fig.cap = "Figure S6.1. Select the best number of groups."}
+select_partition_number(res)
+```
+
+The signature heatmap with 4 subgroups.
+
+```{r, fig.width = 8, fig.height = 8, fig.cap = "Figure S6.2. Signature heatmap of CP classification with 4 subgroups."}
+get_signatures(res, k = 4)
+```
+
+Next we apply hierarchical consensus partitioning (HCP) on the same matrix:
+
+```{r, eval = FALSE}
+set.seed(123)
+rh = hierarchical_partition(m, cores = 4, anno = subtype, anno_col = subtype_col)
+```
+
+```{r, echo = FALSE}
+rh = readRDS("TCGA_GBM_microarray_HCP.rds")
+```
+
+The subgroup hierarchy:
+
+```{r, fig.height = 8, fig.cap = "Figure S6.3. Subgroup hierarchy under HCP."}
+collect_classes(rh)
+```
+
+And the signature heatmap under HCP classification:
+
+```{r, fig.width = 8, fig.height = 8, fig.cap = "Figure S6.4. Signature heatmap under HCP classification."}
+get_signatures(rh)
+```
+
+The statistics on each node:
+
+```{r, results = "markup"}
+df = node_info(rh)
+df
+```
+
+And the statistics on non-leaf nodes:
+
+```{r, results = "markup"}
+df[!df$is_leaf, ]
+```
+
+## Session Info
+
+```{r, results = "markup"}
+sessionInfo()
+```

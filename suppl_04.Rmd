@@ -1,0 +1,352 @@
+---
+title: "Compare cola HCP and Seurat classifications"
+author: "Zuguang Gu (z.gu@dkfz.de)"
+date: '`r Sys.Date()`'
+output:
+  html_document:
+    fig_caption: true
+---
+
+```{r, echo = FALSE}
+library(knitr)
+knitr::opts_chunk$set(
+    warning = FALSE,
+    message = FALSE,
+    fig.align = "center")
+```
+
+
+```{r, echo = FALSE}
+library(cola)
+library(grid)
+library(circlize)
+library(ComplexHeatmap)
+library(GetoptLong)
+
+rh = readRDS("PBMC_cola_hierarchical_partition.rds")
+load("Seurat_classification.RData")
+Seurat_col = Seurat_col[sort(names(Seurat_col))]
+```
+
+
+In Figure 5 of the manuscript, we compared the classifications from cola HCP and Seurat.
+In general, the two classifications are very similar, except the following differences:
+
+- Group <span style='background-color:`r rh@subgroup_col["01"]`;padding:2px 4px;'>"01"</span> in cola HCP is split into two groups with labels <span style='background-color:`r Seurat_col["0"]`;padding:2px 4px;'>"0"</span> and <span style='background-color:`r Seurat_col["2"]`;padding:2px 4px;'>"2"</span> in Seurat.
+- Samples in cola HCP group <span style='background-color:`r rh@subgroup_col["0212"]`;padding:2px 4px;'>"0212"</span> and <span style='background-color:`r rh@subgroup_col["022"]`;padding:2px 4px;'>"022"</span> have a different
+  classification in Seurat with group labels <span style='background-color:`r Seurat_col["1"]`;padding:2px 4px;'>"1"</span> and <span style='background-color:`r Seurat_col["7"]`;padding:2px 4px;'>"7"</span>.
+
+In this supplementary, we go deeper to see where are the differences between the two classifications.
+
+
+```{r, echo = FALSE, fig.cap = "Figure S4.1. Correspondance between cola HCP and Seurat classifications."}
+tb = data.frame(cola_class = as.character(get_classes(rh)), Seurat_class = as.character(Seurat_class))
+
+foo = table(tb$Seurat_class, tb$cola_class)
+foo = as.matrix(foo)
+
+foo = foo[rev(c("2", "0", "4", "5", "7", "1", "3", "6")),
+          rev(c("01", "041", "0211", "0212", "022", "03", "042"))]
+
+w1 = rowSums(foo)
+w2 = colSums(foo)
+
+cum1 = cumsum(w1)
+cum2 = cumsum(w2)
+
+grid.newpage()
+pushViewport(viewport(yscale = c(0, sum(w1)), height = unit(1, "npc") - unit(4, "mm") - unit(1, "cm"), y = unit(2, "mm"), just = "bottom"))
+for(i in seq_len(nrow(foo))) {
+    for(j in seq_len(ncol(foo))) {
+        if(foo[i, j] == 0) next
+        x11 = cum1[i] - w1[i] + sum(foo[i, 1:j]) - foo[i, j]
+        x12 = x11 + foo[i, j]
+
+        x21 = cum2[j] - w2[j] + sum(foo[1:i, j]) - foo[i, j]
+        x22 = x21 + foo[i, j]
+
+        pt1 = circlize:::get_bezier_points(x11, 0.2, x21, 0.6, xlim = c(0, sum(w1)), ylim = c(0, 1))
+        pt2 = circlize:::get_bezier_points(x12, 0.2, x22, 0.6, xlim = c(0, sum(w1)), ylim = c(0, 1))
+
+        grid.polygon(
+            c(0.2, 0.2, pt2[, 2], rev(pt1[, 2]), 0.8), default.unit = "native",
+            c(x11, x12, pt2[, 1], rev(pt1[, 1]), x11),
+            gp = gpar(fill = add_transparency(Seurat_col[rownames(foo)][i], 0.25), col = NA)
+        )
+
+    }
+}
+
+grid.rect(y = cum1, x = unit(0.2, "native"), height = w1, width = unit(5, "mm"), just = c("right", "top"), default.units = "native",
+    gp = gpar(fill = Seurat_col[rownames(foo)], col = NA))
+grid.text("Seurat classification", x = unit(0.2, "native") - unit(7, "mm"), y = 0.5, rot = 90, just = "bottom")
+
+grid.rect(y = cum2, x = 0.6, height = w2, width = unit(5, "mm"), just = c("left", "top"), default.units = "native",
+    gp = gpar(fill = rh@subgroup_col[colnames(foo)], col = NA))
+grid.text("cola HCP classification", x = unit(0.6, "native") + unit(7, "mm"), y = 0.5, rot = 90, just = "top")
+
+
+rh_col = rh@subgroup_col[colnames(foo)]
+lgd = packLegend(
+	Legend(title = "Seurat", at = names(Seurat_col), legend_gp = gpar(fill = Seurat_col)),
+	Legend(title = "cola HCP", at = names(rh_col), legend_gp = gpar(fill = rh_col))
+)
+
+draw(lgd, x = unit(0.6, "npc") + unit(15, "mm"), just = "left")
+```
+
+## Compare cola HCP group "01" and Seurat group "0"/"2"
+
+First we extract samples under cola HCP group "01" or samples under Seurat group "0"/"2".
+The common samples in the two classifications are used for further analysis.
+
+```{r}
+library(cola)
+library(grid)
+library(circlize)
+library(ComplexHeatmap)
+library(GetoptLong)
+
+rh = readRDS("PBMC_cola_hierarchical_partition.rds")
+load("Seurat_classification.RData")
+
+mat = get_matrix(rh)
+
+# group "01" in cola HCP classification
+cl = rh@subgroup
+l1 = cl %in% "01"
+m1 = mat[, l1]
+cl1 = get_classes(rh)[l1]
+
+# group 0 and 2 in Seurat classification
+names(Seurat_class) = colnames(mat)
+l2 = Seurat_class %in% c(0, 2)
+m2 = mat[, l2]
+cl2 = Seurat_class[l2]
+
+# the intersection of samples
+ncol(m1)
+ncol(m2)
+cn = intersect(colnames(m1), colnames(m2))
+length(cn)
+```
+
+The matrix of the subset of samples and the corresponding annotation table:
+
+```{r}
+mm = mat[, cn]
+anno = data.frame(cola_HCP = cl1[cn], Seurat_class = cl2[cn])
+
+anno_col = list(
+	cola_HCP = rh@subgroup_col[unique(cl[cn])],
+	Seurat_class = Seurat_col[unique(cl2[cn])]
+)
+```
+
+To compare the two classifications, one way is to compare the signature genes
+that are significantly expressed between the groups in the classification. For Seurat classification
+which contains two groups in the subset of samples, we apply _t_-test to
+look for significantly differentially expressed genes. FDRs are saved in the variable `fdr`
+and the _t_-values are saved in the variable `tvalue`.
+
+```{r}
+library(genefilter)
+fdr = list()
+tvalue = list()
+stat = rowttests(mm, factor(anno$Seurat_class))
+fdr$Seurat_class = p.adjust(stat$p.value)
+tvalue$Seurat_class = stat$statistic
+fdr = as.data.frame(fdr)
+tvalue = as.data.frame(tvalue)
+```
+
+cola HCP did not separate this subset of samples while marked them as a leaf node "01" in the hierarchy. 
+We can check the consensus partitioning result at node "01":
+
+```{r fig.width = 9, fig.height = 9, fig.cap = "Figure S4.2 Various metrics to select the best number of subgroups for the consensus partitioning on node \"01\"."}
+rh["01"]
+select_partition_number(rh["01"])
+```
+
+The result shows the consensus partitioning result (k = 2) on node "01" is not "very stable" that it did not pass the default
+cutoff of silhouette scores (>= 0.95), thus, in HCP, this subset of samples was not split further more. (Readers can also try
+`collect_plots(rh["01"])` to get more diagnostic plots.)
+
+
+We can still manually split node "01" into two subgroups and compare to the Seurat classification.
+In the following code, the 2-group cola CP classification on node "01" is added to the annotation table `anno`, and we also
+calcualte the differential expression for cola CP classification.
+
+```{r}
+cl_CP = get_classes(rh["01"], k = 2)[cn, "class"]
+anno$cola_CP = as.character(cl_CP)
+stat = rowttests(mm, factor(anno$cola_CP))
+fdr$cola_CP = p.adjust(stat$p.value)
+tvalue$cola_CP = stat$statistic
+
+anno_col$cola_CP = c("1" = "orange", "2" = "purple")
+```
+
+Next we visualize the differential genes (FDR < 0.05) in the two classifications.
+
+
+```{r, fig.width = 9, echo = FALSE, fig.cap = "Figure S4.3. Heatmap of signature genes from the two classifications."}
+l = fdr$cola_CP < 0.05
+p1 = grid.grabExpr(draw(
+	Heatmap(t(scale(t(mm[l, ]))), name = "z-score", top_annotation = HeatmapAnnotation(df = anno[, -1], col = anno_col), column_split = anno$cola_CP,
+		column_title = qq("@{sum(l)} significant genes (FDR < 0.05)\ncola_CP group 1 vs group 2"),
+		show_row_names = FALSE, show_column_names = FALSE, show_row_dend = FALSE, show_column_dend = FALSE), merge_legend = TRUE
+))
+
+l = fdr$Seurat_class < 0.05
+p2 = grid.grabExpr(draw(
+	Heatmap(t(scale(t(mm[l, ]))), name = "z-score", top_annotation = HeatmapAnnotation(df = anno[, -1], col = anno_col), column_split = anno$Seurat_class,
+		column_title = qq("@{sum(l)} significant genes (FDR < 0.05)\nSeurat group 0 verse group 2"),
+		show_row_names = FALSE, show_column_names = FALSE, show_row_dend = FALSE, show_column_dend = FALSE), merge_legend = TRUE
+))
+
+library(cowplot)
+plot_grid(p1, p2, nrow = 1)
+```
+
+And the overlap of the two sets of signature genes:
+
+
+```{r, fig.cap = "Figure S4.4. Euler diagram of the signature genes from the two classifications."}
+gl = list("cola_CP" = rownames(mm)[fdr$cola_CP < 0.05],
+	      "Seurat_class" = rownames(mm)[fdr$Seurat_class < 0.05])
+library(eulerr)
+plot(euler(gl), quantities = TRUE)
+```
+
+So, here in general, Seurat classification is similar to cola CP classification for this subset of samples.
+If we check the overlap of the two classifications:
+
+```{r}
+table(anno$Seurat_class, anno$cola_CP)
+```
+
+The similarity is:
+
+```{r}
+(559 + 363)/nrow(anno)
+```
+
+But note, the cola CP classification is less stable by the sense of consensus partitioning.
+
+The two classifications have similar sets of signature genes but the classifications are slightly different.
+We next check the differential expression in the two classifications by comparing the _t_-values from
+the _t_-tests.
+
+```{r, fig.width = 6, fig.height = 6, fig.cap = "Figure S4.5. Compare differential expression in the two classifications."}
+plot(tvalue$Seurat_class, tvalue$cola_CP, asp = 1)
+abline(a = 0, b = 1)
+
+loess_fit = loess(tvalue$cola_CP ~ tvalue$Seurat_class)
+loess_predict = predict(loess_fit, x1, se = TRUE)
+lines(tvalue$cola_CP, loess_predict$fit, col = "red")
+```
+
+The plot shows the differential expression in cola CP is higher than Seurat. For this sense, we can
+make the conclusion that cola can classify samples that are more separated than Seurat.
+
+## Compare cola HCP group "0212"/"022" with Seurat group "1"/"7"
+
+Similarly, we compare the cola HCP classification with groups "0212", "022"
+and the Seurat classification with groups "1" and "7". We first extract the subset of samples.
+
+```{r}
+# group "0212", "022" in cola HCP classification
+cl = rh@subgroup
+l1 = cl %in% c("0212", "022")
+m1 = mat[, l1]
+cl1 = get_classes(rh)[l1]
+
+# group 1 and 7 in Seurat classification
+names(Seurat_class) = colnames(rh)
+l2 = Seurat_class %in% c(1, 7)
+m2 = mat[, l2]
+cl2 = Seurat_class[l2]
+
+# the intersection of samples
+ncol(m1)
+ncol(m2)
+cn = intersect(colnames(m1), colnames(m2))
+length(cn)
+
+# the submatrix
+mm = mat[, cn]
+anno = data.frame(cola_HCP = cl1[cn], Seurat_class = cl2[cn])
+
+anno_col = list(
+	cola_HCP = rh@subgroup_col[unique(cl[cn])],
+	Seurat_class = Seurat_col[unique(cl2[cn])]
+)
+```
+
+We apply differential expression analysis to both cola HCP classification and Seurat classification.
+
+```{r}
+library(genefilter)
+fdr = list()
+tvalue = list()
+stat = rowttests(mm, factor(anno$Seurat_class))
+fdr$Seurat_class = p.adjust(stat$p.value)
+tvalue$Seurat_class = stat$statistic
+
+stat = rowttests(mm, factor(anno$cola_HCP))
+fdr$cola_HCP = p.adjust(stat$p.value)
+tvalue$cola_HCP = stat$statistic
+
+fdr = as.data.frame(fdr)
+tvalue = as.data.frame(tvalue)
+```
+
+Heatmaps of the two sets of signature genes.
+
+
+```{r, fig.width = 9, echo = FALSE, fig.cap = "Figure S4.6. Heatmap of signature genes from the two classifications."}
+l = fdr$cola_HCP < 0.05
+p1 = grid.grabExpr(draw(
+	Heatmap(t(scale(t(mm[l, ]))), name = "z-score", top_annotation = HeatmapAnnotation(df = anno), column_split = anno$cola_HCP,
+		column_title = qq("@{sum(l)} significant genes (FDR < 0.05)\ncola_HCP group 0212 vs group 022"),
+		show_row_names = FALSE, show_column_names = FALSE, show_row_dend = FALSE, show_column_dend = FALSE), merge_legend = TRUE
+))
+
+l = fdr$Seurat_class < 0.05
+p2 = grid.grabExpr(draw(
+	Heatmap(t(scale(t(mm[l, ]))), name = "z-score", top_annotation = HeatmapAnnotation(df = anno), column_split = anno$Seurat_class,
+		column_title = qq("@{sum(l)} significant genes (FDR < 0.05)\nSeurat group 1 verse group 7"),
+		show_row_names = FALSE, show_column_names = FALSE, show_row_dend = FALSE, show_column_dend = FALSE), merge_legend = TRUE
+))
+
+library(cowplot)
+plot_grid(p1, p2, nrow = 1)
+```
+
+The overlap of the two sets of signature genes. Here we can see the two sets of signatures are quite different.
+
+```{r, fig.cap = "Figure S4.7. Euler diagram of the signature genes from the two classifications."}
+gl = list("cola_HCP" = rownames(mm)[fdr$cola_HCP < 0.05],
+	      "Seurat_class" = rownames(mm)[fdr$Seurat_class < 0.05])
+library(eulerr)
+plot(euler(gl), quantities = TRUE)
+```
+
+Then it is worthwhile to compare the bioloigcal functions (by Gene Ontology terms) of the two different sets of signature genes.
+
+```{r, fig.width = 9, fig.height = 6, results = FALSE, message = FALSE, fig.cap = "Figure S4.8. Functional enrichment analysis on the signature gene lists."}
+fl = lapply(gl, functional_enrichment)
+library(simplifyEnrichment)
+simplifyGOFromMultipleLists(lapply(fl, function(x) x$BP))
+```
+
+Generally, both lists of signature genes generate quite a lot of significant GO terms and their biological
+functions are similar. cola HCP generates more significant GO terms (208) than Seurat (132) under FDR < 0.01.
+
+
+## Session info
+
+```{r}
+sessionInfo()
+```

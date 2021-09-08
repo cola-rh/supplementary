@@ -1,0 +1,102 @@
+---
+title: "Automatically select the 'knee/elbow' of a curve"
+author: "Zuguang Gu (z.gu@dkfz.de)"
+date: '`r Sys.Date()`'
+output:
+  html_document:
+    fig_caption: true
+---
+
+```{r, echo = FALSE}
+library(knitr)
+knitr::opts_chunk$set(
+    warning = FALSE,
+    message = FALSE,
+    results = FALSE,
+    fig.align = "center")
+```
+
+We demonstrate the method that automatically selects the "knee/elbow" of a curve proposed in the study [Satoppa et al., 2011](https://ieeexplore.ieee.org/document/5961514).
+
+We first get a vector of scores which are the row means of the matrix from the Golub dataset.
+
+```{r}
+library(cola)
+library(golubEsets)
+data(Golub_Merge)
+m = exprs(Golub_Merge)
+
+m[m <= 1] = NA
+m = log10(m)
+m = adjust_matrix(m)
+
+library(matrixStats)
+s = rowSds(m)
+```
+
+Values in `s` are sorted increasingly and they are visualized as a
+scatterplot. Now the task is to identify the "elbow" of this curve.
+
+```{r, fig.cap = "Figure S2.1. Sorted row means of Golub dataset."}
+s = sort(s)
+plot(s)
+```
+
+[Satoppa et al., 2011](https://ieeexplore.ieee.org/document/5961514) proposed a method that selects the "elbow point" as the one having the
+largest distance to the straight line (denoted as $L$) that connects the two boundary points with the minimal and maximal values on _y_-axis. The method is demonstrated by the following code. Note values on both _x_-axis and _y_-axis are scaled into `[0, 1]`.
+
+```{r, fig.cap = "Figure S2.2. Demonstration of the method to look for elbow/knee of the curve."}
+y = s
+x = seq_along(y)
+
+x = x/max(x)
+y = y/max(y)
+
+n = length(x)
+a = (y[n] - y[1])/(x[n] - x[1])
+b = y[1] - a * x[1]
+d = a * x + b - y
+x1 = x[which.min(d)]
+x2 = x[which.max(d)]
+theta = atan(a)
+
+plot(x, y, xlab = "index", ylab = "value", asp = 1)
+abline(a = b, b = a)
+
+breaks = seq(1000, 3800, length = 8)/n
+y0 = quantile(y, breaks)
+y1 = a*breaks + b
+segments(breaks, y0, breaks, y1, col = "red")
+
+a2 = tan(theta + pi/2)
+b2 = y0- a2*breaks
+x2 = (b2 - b)/(a - a2)
+y2 = a*x2 + b
+segments(breaks, y0, x2, y2, col = "blue")
+```
+
+Instead of selecting by the distance to $L$ (the lengths of blue lines), we can simply select according
+to the vertical distance to $L$ (the lengths of red lines). The two selection rules are actually identical.
+
+We implement this method with the function `knee_finder2()` in **cola**. The function generates two plots: the original curve
+and a curve of the vertical distance to $L$.
+
+
+```{r, fig.width = 10, fig.height = 5, results = TRUE, fig.cap = "Figure S2.3. Output plots from knee_finder2()."}
+knee_finder2(s, plot = TRUE)
+```
+
+`knee_finder()` returns a vector of two. The second value corresponds to the elbow of the curve
+and the first value corresponds to the knee of the curve, as shown in the following plot.
+
+
+```{r, fig.width = 10, fig.height = 5, results = TRUE, fig.cap = "Figure S2.4. When both knee and elbow exist in the curve."}
+s = rnorm(1000)
+knee_finder2(s, plot = TRUE)
+```
+
+## Session info
+
+```{r, results = TRUE}
+sessionInfo()
+```
