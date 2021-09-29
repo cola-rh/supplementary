@@ -207,7 +207,8 @@ Figure S1.1. Heatmap of the random matrix used in Figure 1 in the manuscript.
 </p>
 </div>
 <p>The standard consensus partition procedures cannot identify all four groups. It can only identify three groups as the best results:</p>
-<pre class="r"><code>res = consensus_partition(m, top_value_method = &quot;SD&quot;, partition_method = &quot;kmeans&quot;,
+<pre class="r"><code>library(cola)
+res = consensus_partition(m, top_value_method = &quot;SD&quot;, partition_method = &quot;kmeans&quot;,
     top_n = 50, anno = group, anno_col = group_col, scale_rows = FALSE)
 collect_plots(res)</code></pre>
 <div class="figure" style="text-align: center">
@@ -217,8 +218,7 @@ Figure S1.2. Various plots for interpreting consensus partitioning results.
 </p>
 </div>
 <p>Then we apply hierarchical consensus partitioning with the function <code>hierarchical_partition()</code> on the matrix:</p>
-<pre class="r"><code>library(cola)
-rh = hierarchical_partition(m, 
+<pre class="r"><code>rh = hierarchical_partition(m, 
     top_value_method = &quot;SD&quot;, partition_method = &quot;kmeans&quot;, 
     anno = group, anno_col = group_col,
     top_n = 50, scale_rows = FALSE)</code></pre>
