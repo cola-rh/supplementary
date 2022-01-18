@@ -1,0 +1,116 @@
+---
+title: "Compare two classifications"
+author: "Zuguang Gu (z.gu@dkfz.de)"
+date: '`r Sys.Date()`'
+output:
+  html_document:
+    fig_caption: true
+---
+
+```{r, echo = FALSE}
+library(knitr)
+knitr::opts_chunk$set(
+    warning = FALSE,
+    message = FALSE,
+    fig.align = "center")
+```
+
+In this supplementary file, we demonstrate how to calculate overall agreement for two classifications. Here we use two classifications by cola and Seurat
+on the PBMC scRNASeq dataset.
+
+```{r}
+tb = readRDS("cola_Seurat_classification.rds")
+head(tb)
+```
+
+The contingency table on the two classifications:
+
+```{r}
+table(tb)
+```
+
+Next we define a function that calculates overlap coeffcient for every pair of classes in the two classifications:
+
+
+```{r}
+overlap_coefficient = function(x, y) {
+    le1 = unique(x)
+    le2 = unique(y)
+
+    om = matrix(nrow = length(le1), ncol = length(le2))
+    dimnames(om) = list(le1, le2)
+    for(a in le1) {
+        for(b in le2) {
+            om[a, b] = sum(x == a & y == b)/min(sum(x == a), sum(y == b))
+        }
+    }
+    om
+}
+m = overlap_coefficient(tb$cola_class, tb$Seurat_class)
+```
+
+We manually reorder `m` and visualize it via a heatmap. The two barplot annotations shows number of samples in each class.
+
+```{r}
+library(ComplexHeatmap)
+
+m = m[c("01", "022", "0212", "03", "041", "042", "0211"), 
+      c("0", "2", "1", "7", "3", "4", "6", "8", "5")]
+t1 = as.vector(table(tb$cola_class)[rownames(m)])
+t2 = as.vector(table(tb$Seurat_class)[colnames(m)])
+Heatmap(m, name = "overlap coefficient",
+    right_annotation = rowAnnotation(bar1 = anno_barplot(t1, width = unit(2, "cm"))),
+    top_annotation = HeatmapAnnotation(bar2 = anno_barplot(t2, height = unit(2, "cm"))),
+    row_title = "cola classification", row_names_side = "left",
+    column_title = "Seurat classification", column_title_side = "bottom",
+    cluster_rows = FALSE, cluster_columns = FALSE)
+```
+
+Generally speaking, if cells with high overlap coefficents locate on the diagonal of the heatmap, it means the two classifications highly agrees.
+
+For every class in cola classification (which is on rows of `m`), the agreement to Seurat classification is defined as the maximal overlap coeffcient to all classes in Seurat.
+
+```{r}
+library(matrixStats)
+v = rowMaxs(m)
+v
+```
+
+Finally, the overlap classification agreement of cola to Seurat is defined as the mean agreement of each class to Seurat weighted by the class size.
+
+```{r}
+size = table(tb$cola_class)
+size = size[rownames(m)]
+sum(v*size)/sum(size)
+```
+
+The process can be wrapped into a function `overall_classification_agreement()`:
+
+```{r}
+overall_classification_agreement = function(x, y) {
+    m = overlap_coefficient(x, y)
+
+    size = table(x)
+    size = size[rownames(m)]
+    v = rowMaxs(m)
+    sum(v*size)/sum(size)
+}
+```
+
+We can test the overlap classification agreement of cola to Seurat and of Seurat to cola. The two values are not the same, but are highly similar.
+
+```{r}
+overall_classification_agreement(tb$cola_class, tb$Seurat_class)
+overall_classification_agreement(tb$Seurat_class, tb$cola_class)
+```
+
+We can randomly permute the Seurat classification to get a null distribution of the overlap classification agreement.
+
+```{r}
+set.seed(123)
+v = replicate(1000, 
+    overall_classification_agreement(tb$cola_class, sample(tb$Seurat_class, nrow(tb)))
+)
+plot(density(v), xlim = c(0, 1))
+abline(v = 0.9470064, col = "red")
+```

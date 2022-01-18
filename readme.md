@@ -5,3 +5,6 @@
 - [Supplementary file 4. Compare cola HCP and Seurat classifications](https://cola-rh.github.io/supplementary/suppl_04.html)
 - [Supplementary file 5. Classification of central nervous system tumors](https://cola-rh.github.io/supplementary/suppl_05.html)
 - [Supplementary file 6. Analysis of the TCGA GBM microarray dataset](https://cola-rh.github.io/supplementary/suppl_06.html)
+- [Supplementary file 7. Compare two classifications](https://cola-rh.github.io/supplementary/suppl_07.html)
+- [Supplementary file 8. Table of class labels of PBMC and CNST dataset](https://cola-rh.github.io/supplementary/suppl_08.xlsx)
+- [Supplementary file 9. Compare to machine learning methods for predicting class labels of deselected samples](https://cola-rh.github.io/supplementary/suppl_09.pdf)
